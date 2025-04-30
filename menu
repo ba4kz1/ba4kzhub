@@ -1,0 +1,1772 @@
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local Cam = workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
+
+-- Verificar carregamento da biblioteca Rayfield
+local success, Rayfield = pcall(function()
+    return loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+end)
+
+if not success then
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "Erro",
+        Text = "Falha ao carregar Rayfield. Verifique sua conexão.",
+        Duration = 10
+    })
+    return
+end
+
+-- Variáveis globais
+local isAuthenticated = false
+local isPremium = false
+local isMaster = false
+
+-- Criação da janela inicial (autenticação)
+local Window = Rayfield:CreateWindow({
+    Name = "Ba4kz Hub | Universal BR",
+    Icon = "key",
+    LoadingTitle = "Carregando Ba4kz Hub",
+    LoadingSubtitle = "Criador: Ba4kz",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "Ba4kz Hub",
+        FileName = "Config"
+    },
+    KeySystem = false
+})
+
+-- Aba de Autenticação
+local AuthTab = Window:CreateTab("Autenticação", "key")
+
+-- Função de validação da chave
+local function validateKey(inputKey)
+    if not inputKey or inputKey == "" then
+        return false, nil, "Chave vazia"
+    end
+
+    local success, response = pcall(function()
+        local url = "https://keys-65bcf-default-rtdb.firebaseio.com/keys/" .. HttpService:UrlEncode(inputKey) .. ".json"
+        local httpResponse = game:HttpGet(url)
+        return HttpService:JSONDecode(httpResponse)
+    end)
+
+    if not success then
+        warn("Key validation failed: " .. tostring(response))
+        return false, nil, "Erro de conexão"
+    end
+
+    if response == nil then
+        return false, nil, "Chave não encontrada"
+    end
+
+    if not response.valid then
+        return false, nil, "Chave inválida"
+    end
+
+    print("Key valid, type: " .. tostring(response.type))
+    return true, response.type, nil
+end
+
+-- Função de autenticação
+local function authenticate(inputKey)
+    print("Authenticating with key: " .. tostring(inputKey))
+    if not inputKey or inputKey == "" then
+        Rayfield:Notify({
+            Title = "Erro",
+            Content = "Insira uma chave válida.",
+            Duration = 5,
+            Image = "alert"
+        })
+        return
+    end
+
+    local isValid, authType, errorMsg = validateKey(inputKey)
+    if isValid then
+        local validTypes = {"normal", "premium", "master"}
+        if not table.find(validTypes, authType) then
+            Rayfield:Notify({
+                Title = "Erro",
+                Content = "Tipo de chave desconhecido: " .. tostring(authType),
+                Duration = 5,
+                Image = "alert"
+            })
+            print("Unknown key type: " .. tostring(authType))
+            return
+        end
+
+        isAuthenticated = true
+        isPremium = authType == "premium" or authType == "master"
+        isMaster = authType == "master"
+        Rayfield:Notify({
+            Title = "Sucesso",
+            Content = authType == "master" and "Bem-vindo ao Ba4kz Hub Master!" or
+                      authType == "premium" and "Bem-vindo ao Ba4kz Hub Premium!" or
+                      "Bem-vindo ao Ba4kz Hub!",
+            Duration = 5,
+            Image = "check"
+        })
+        print("Authentication successful, key type: " .. authType)
+        pcall(setclipboard, "https://discord.gg/your-discord")
+        pcall(function() Rayfield:Destroy() end)
+        loadMainMenu()
+    else
+        Rayfield:Notify({
+            Title = "Erro",
+            Content = errorMsg or "Chave inválida.",
+            Duration = 5,
+            Image = "alert"
+        })
+        print("Authentication failed: " .. (errorMsg or "Invalid key"))
+    end
+end
+
+-- Interface de autenticação
+AuthTab:CreateButton({
+    Name = "Copiar Link do Discord",
+    Callback = function()
+        pcall(setclipboard, "https://discord.gg/your-discord")
+        Rayfield:Notify({
+            Title = "Link Copiado",
+            Content = "Visite nosso Discord para obter uma chave!",
+            Duration = 5,
+            Image = "check"
+        })
+    end
+})
+
+AuthTab:CreateInput({
+    Name = "Chave",
+    PlaceholderText = "Digite a chave...",
+    RemoveTextAfterFocusLost = true,
+    Callback = function(value)
+        print("Key entered: " .. tostring(value))
+        authenticate(value)
+    end
+})
+
+AuthTab:CreateParagraph({
+    Title = "Autenticação",
+    Content = "Insira sua chave abaixo. O sistema identificará se é Normal, Premium ou Master.\n- Normal: Scripts e visuais.\n- Premium: Aimbot, ESP, triggerbot.\n- Master: Fly, noclip, ESP avançado e mais!"
+})
+
+-- Função para carregar o menu principal
+function loadMainMenu()
+    local success, Rayfield = pcall(function()
+        return loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+    end)
+
+    if not success then
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Erro",
+            Text = "Falha ao recarregar Rayfield.",
+            Duration = 10
+        })
+        return
+    end
+
+    local Window = Rayfield:CreateWindow({
+        Name = "Ba4kz Hub | Universal BR",
+        Icon = "key",
+        LoadingTitle = "Carregando Ba4kz Hub",
+        LoadingSubtitle = "Criador: Ba4kz",
+        ConfigurationSaving = {
+            Enabled = true,
+            FolderName = "Ba4kz Hub",
+            FileName = "Config"
+        },
+        KeySystem = false
+    })
+
+    -- Variáveis globais
+    local SelectedScriptID = nil
+    local AutoExecute = false
+    local Scripts = {
+        [1] = {Url = "https://raw.githubusercontent.com/WeshkyPL/WehskyHub/refs/heads/main/WeshkyHubV1.12.lua", Name = "Prison Life"},
+        [2] = {Url = "https://raw.githubusercontent.com/as6cd0/SP_Hub/refs/heads/main/BladeBallEnglish", Name = "Blade Ball"}
+    }
+    -- Mapeamento de Place IDs para índices da tabela Scripts
+    local PlaceIdToScript = {
+        [155615604] = 1, -- Prison Life
+        [13772394625] = 2 -- Blade Ball
+    }
+    local aimbotHotkey = Enum.KeyCode.E
+    local aimbotEnabled = false
+    local aimParts = {"Head"}
+    local aimFov = 100
+    local predictionStrength = 0.065
+    local smoothing = 0.05
+    local stickyAimEnabled = false
+    local teamCheck = false
+    local wallCheck = true
+    local healthCheck = false
+    local minHealth = 0
+    local antiAim = false
+    local antiAimAmountX = 0
+    local antiAimAmountY = -100
+    local antiAimAmountZ = 0
+    local antiAimMethod = "Reset Velo"
+    local randomVeloRange = 100
+    local spinBot = false
+    local spinBotSpeed = 20
+    local circleColor = Color3.fromRGB(255, 0, 0)
+    local targetedCircleColor = Color3.fromRGB(0, 255, 0)
+    local rainbowFov = false
+    local hue = 0
+    local rainbowSpeed = 0.005
+    local Esp = false
+    local Triggerbot = false
+    local EspAdvanced = false
+    local Wallhack = false
+    local NoRecoil = false
+    local SpeedHack = false
+    local SpeedValue = 16
+    local Fly = false
+    local Noclip = false
+    local FlySpeed = 50
+    local aimbotActivationMode = "Hotkey"
+
+    -- Funções de salvar e carregar configurações
+    local function SaveSettings()
+        if not writefile then return end
+        local json = HttpService:JSONEncode({
+            SelectedScriptID = SelectedScriptID,
+            AutoExecute = AutoExecute,
+            aimbotHotkey = aimbotHotkey.Name,
+            aimbotEnabled = aimbotEnabled,
+            aimParts = aimParts,
+            aimFov = aimFov,
+            predictionStrength = predictionStrength,
+            smoothing = smoothing,
+            stickyAimEnabled = stickyAimEnabled,
+            teamCheck = teamCheck,
+            wallCheck = wallCheck,
+            healthCheck = healthCheck,
+            minHealth = minHealth,
+            antiAim = antiAim,
+            antiAimAmountX = antiAimAmountX,
+            antiAimAmountY = antiAimAmountY,
+            antiAimAmountZ = antiAimAmountZ,
+            antiAimMethod = antiAimMethod,
+            randomVeloRange = randomVeloRange,
+            spinBot = spinBot,
+            spinBotSpeed = spinBotSpeed,
+            circleColor = {circleColor.R, circleColor.G, circleColor.B},
+            targetedCircleColor = {targetedCircleColor.R, targetedCircleColor.G, targetedCircleColor.B},
+            rainbowFov = rainbowFov,
+            rainbowSpeed = rainbowSpeed,
+            Esp = Esp,
+            Triggerbot = Triggerbot,
+            EspAdvanced = EspAdvanced,
+            Wallhack = Wallhack,
+            NoRecoil = NoRecoil,
+            SpeedHack = SpeedHack,
+            SpeedValue = SpeedValue,
+            Fly = Fly,
+            Noclip = Noclip,
+            FlySpeed = FlySpeed,
+            aimbotActivationMode = aimbotActivationMode
+        })
+        pcall(function() writefile("Ba4kzHubConfig.json", json) end)
+    end
+
+    local function LoadSettings()
+        if not isfile or not readfile then return end
+        if isfile("Ba4kzHubConfig.json") then
+            local json = readfile("Ba4kzHubConfig.json")
+            local settings = HttpService:JSONDecode(json)
+            SelectedScriptID = settings.SelectedScriptID
+            AutoExecute = settings.AutoExecute or false
+            aimbotHotkey = settings.aimbotHotkey and Enum.KeyCode[settings.aimbotHotkey] or aimbotHotkey
+            aimbotEnabled = settings.aimbotEnabled or false
+            aimParts = settings.aimParts or {"Head"}
+            aimFov = settings.aimFov or 100
+            predictionStrength = settings.predictionStrength or 0.065
+            smoothing = settings.smoothing or 0.05
+            stickyAimEnabled = settings.stickyAimEnabled or false
+            teamCheck = settings.teamCheck or false
+            wallCheck = settings.wallCheck or true
+            healthCheck = settings.healthCheck or false
+            minHealth = settings.minHealth or 0
+            antiAim = settings.antiAim or false
+            antiAimAmountX = settings.antiAimAmountX or 0
+            antiAimAmountY = settings.antiAimAmountY or -100
+            antiAimAmountZ = settings.antiAimAmountZ or 0
+            antiAimMethod = settings.antiAimMethod or "Reset Velo"
+            randomVeloRange = settings.randomVeloRange or 100
+            spinBot = settings.spinBot or false
+            spinBotSpeed = settings.spinBotSpeed or 20
+            circleColor = settings.circleColor and Color3.new(unpack(settings.circleColor)) or circleColor
+            targetedCircleColor = settings.targetedCircleColor and Color3.new(unpack(settings.targetedCircleColor)) or targetedCircleColor
+            rainbowFov = settings.rainbowFov or false
+            rainbowSpeed = settings.rainbowSpeed or 0.005
+            Esp = settings.Esp or false
+            Triggerbot = settings.Triggerbot or false
+            EspAdvanced = settings.EspAdvanced or false
+            Wallhack = settings.Wallhack or false
+            NoRecoil = settings.NoRecoil or false
+            SpeedHack = settings.SpeedHack or false
+            SpeedValue = settings.SpeedValue or 16
+            Fly = settings.Fly or false
+            Noclip = settings.Noclip or false
+            FlySpeed = settings.FlySpeed or 50
+            aimbotActivationMode = settings.aimbotActivationMode or "Hotkey"
+        end
+    end
+
+    pcall(LoadSettings)
+
+    -- Verificar Place ID e exibir notificação
+    local function checkPlaceId()
+        local currentPlaceId = game.PlaceId
+        local scriptIndex = PlaceIdToScript[currentPlaceId]
+        if scriptIndex and Scripts[scriptIndex] then
+            local scriptData = Scripts[scriptIndex]
+            Rayfield:Notify({
+                Title = "Script Disponível!",
+                Content = "Um script para " .. scriptData.Name .. " foi encontrado. Deseja executá-lo?",
+                Duration = 10,
+                Image = "check",
+                Actions = {
+                    Accept = {
+                        Name = "Executar",
+                        Callback = function()
+                            local success, err = pcall(function()
+                                loadstring(game:HttpGet(scriptData.Url))()
+                            end)
+                            if success then
+                                SelectedScriptID = scriptIndex
+                                SaveSettings()
+                                Rayfield:Notify({
+                                    Title = "Sucesso",
+                                    Content = scriptData.Name .. " executado!",
+                                    Duration = 5,
+                                    Image = "check"
+                                })
+                            else
+                                Rayfield:Notify({
+                                    Title = "Erro",
+                                    Content = "Falha ao carregar " .. scriptData.Name .. ": " .. tostring(err),
+                                    Duration = 5,
+                                    Image = "alert"
+                                })
+                            end
+                        end
+                    },
+                    Ignore = {
+                        Name = "Recusar",
+                        Callback = function()
+                            Rayfield:Notify({
+                                Title = "Recusado",
+                                Content = "O script para " .. scriptData.Name .. " não foi executado.",
+                                Duration = 5,
+                                Image = "pause"
+                            })
+                        end
+                    }
+                }
+            })
+        end
+    end
+
+    -- Auto-execute
+    if AutoExecute and SelectedScriptID then
+        local scriptData = Scripts[SelectedScriptID]
+        if scriptData then
+            task.spawn(function()
+                task.wait(3)
+                local success, err = pcall(function()
+                    loadstring(game:HttpGet(scriptData.Url))()
+                end)
+                if not success then
+                    Rayfield:Notify({
+                        Title = "Erro no Auto-Execute",
+                        Content = tostring(err),
+                        Duration = 5,
+                        Image = "alert"
+                    })
+                else
+                    Rayfield:Notify({
+                        Title = "Auto-Execute",
+                        Content = "Script " .. scriptData.Name .. " executado!",
+                        Duration = 5,
+                        Image = "check"
+                    })
+                end
+            end)
+        end
+    end
+
+    -- Aba Home
+    local HomeTab = Window:CreateTab("Home", "home")
+    HomeTab:CreateParagraph({
+        Title = "Bem-vindo ao Ba4kz Hub!",
+        Content = isMaster and "Você é um usuário Master! Acesse fly, noclip e mais na aba Combat." or
+                  isPremium and "Você é um usuário Premium! Confira aimbot e ESP na aba Combat." or
+                  "Considere uma chave Premium ou Master para mais funcionalidades!"
+    })
+    HomeTab:CreateButton({
+        Name = "Copiar Link do Discord",
+        Callback = function()
+            pcall(setclipboard, "https://discord.gg/your-discord")
+            Rayfield:Notify({
+                Title = "Discord Copiado",
+                Content = "Link copiado!",
+                Duration = 5,
+                Image = "check"
+            })
+        end
+    })
+    HomeTab:CreateParagraph({
+        Title = "Dicas",
+        Content = "- Scripts: Hacks para jogos e o ZARALHO Mod Menu.\n- Combat (Premium/Master): Aimbot, fly, noclip.\n- Visuals: Fullbright.\n- Server: Gerencie servidores."
+    })
+
+    -- Aba Scripts
+    local ScriptsTab = Window:CreateTab("Scripts", "play")
+    ScriptsTab:CreateParagraph({
+        Title = "Scripts",
+        Content = "Execute scripts para jogos ou use scripts fixos. ZARALHO Mod Menu é experimental!"
+    })
+
+    ScriptsTab:CreateToggle({
+        Name = "Auto-Execute",
+        CurrentValue = AutoExecute,
+        Callback = function(value)
+            AutoExecute = value
+            SaveSettings()
+            Rayfield:Notify({
+                Title = "Auto-Execute",
+                Content = value and "Ativado!" or "Desativado!",
+                Duration = 5,
+                Image = value and "play" or "pause"
+            })
+        end
+    })
+
+    local function AddScriptButton(tab, scriptData)
+        tab:CreateButton({
+            Name = scriptData.Name,
+            Callback = function()
+                local success, err = pcall(function()
+                    loadstring(game:HttpGet(scriptData.Url))()
+                end)
+                if not success then
+                    Rayfield:Notify({
+                        Title = "Erro",
+                        Content = "Falha ao carregar " .. scriptData.Name .. ": " .. tostring(err),
+                        Duration = 5,
+                        Image = "alert"
+                    })
+                else
+                    SelectedScriptID = scriptData.Id
+                    SaveSettings()
+                    Rayfield:Notify({
+                        Title = "Script Carregado",
+                        Content = scriptData.Name .. " executado!",
+                        Duration = 5,
+                        Image = "check"
+                    })
+                end
+            end
+        })
+    end
+
+    for id, data in pairs(Scripts) do
+        data.Id = id
+        AddScriptButton(ScriptsTab, data)
+    end
+
+    ScriptsTab:CreateSection("Scripts Fixos")
+    ScriptsTab:CreateButton({
+        Name = "Infinity Yield",
+        Callback = function()
+            pcall(function() loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))() end)
+            Rayfield:Notify({
+                Title = "Infinity Yield",
+                Content = "Executado!",
+                Duration = 5,
+                Image = "check"
+            })
+        end
+    })
+
+    ScriptsTab:CreateButton({
+        Name = "Anti-Lag",
+        Callback = function()
+            pcall(function() loadstring(game:HttpGet('https://rawscripts.net/raw/Universal-Script-antilag-15462'))() end)
+            Rayfield:Notify({
+                Title = "Anti-Lag",
+                Content = "Texturas removidas!",
+                Duration = 5,
+                Image = "check"
+            })
+        end
+    })
+
+    ScriptsTab:CreateButton({
+        Name = "ZARALHO Mod Menu",
+        Callback = function()
+            local Players = game:GetService("Players")
+            local LocalPlayer = Players.LocalPlayer
+            local Workspace = game:GetService("Workspace")
+
+            local function notify(title, text)
+                Rayfield:Notify({
+                    Title = title,
+                    Content = text,
+                    Duration = 5,
+                    Image = "check"
+                })
+            end
+
+            -- ZARALHO Mod Menu
+            local zaralhoMenu = Instance.new("ScreenGui")
+            zaralhoMenu.Name = "ZaralhoMenu"
+            zaralhoMenu.Parent = game:GetService("CoreGui")
+            zaralhoMenu.ResetOnSpawn = false
+
+            local frame = Instance.new("Frame")
+            frame.Size = UDim2.new(0, 300, 0, 400)
+            frame.Position = UDim2.new(0.5, -150, 0.5, -200)
+            frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+            frame.Parent = zaralhoMenu
+
+            local title = Instance.new("TextLabel")
+            title.Size = UDim2.new(1, 0, 0, 50)
+            title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+            title.Text = "ZARALHO Mod Menu"
+            title.TextColor3 = Color3.fromRGB(255, 255, 255)
+            title.TextScaled = true
+            title.Parent = frame
+
+            local function addButton(name, callback)
+                local button = Instance.new("TextButton")
+                button.Size = UDim2.new(0.9, 0, 0, 40)
+                button.Position = UDim2.new(0.05, 0, 0, #frame:GetChildren() * 50)
+                button.BackgroundColor3 = Color3.fromRGB(70, 70, 70)
+                button.Text = name
+                button.TextColor3 = Color3.fromRGB(255, 255, 255)
+                button.TextScaled = true
+                button.Parent = frame
+                button.MouseButton1Click:Connect(function()
+                    pcall(callback)
+                end)
+            end
+
+            addButton("Deletar Baseplate", function()
+                local baseplate = Workspace:FindFirstChild("Baseplate")
+                if baseplate then
+                    baseplate:Destroy()
+                    notify("ZARALHO", "Baseplate deletada!")
+                else
+                    notify("ZARALHO", "Baseplate não encontrada!")
+                end
+            end)
+
+            addButton("TP para Jogador Aleatório", function()
+                local players = Players:GetPlayers()
+                local target = players[math.random(1, #players)]
+                if target ~= LocalPlayer and target.Character and target.Character:FindFirstChild("HumanoidRootPart") then
+                    LocalPlayer.Character.HumanoidRootPart.CFrame = target.Character.HumanoidRootPart.CFrame
+                    notify("ZARALHO", "Teleportado para " .. target.Name .. "!")
+                else
+                    notify("ZARALHO", "Nenhum jogador válido encontrado!")
+                end
+            end)
+
+            addButton("Kill Todos", function()
+                for _, player in pairs(Players:GetPlayers()) do
+                    if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") then
+                        player.Character.Humanoid.Health = 0
+                    end
+                end
+                notify("ZARALHO", "Tentativa de matar todos!")
+            end)
+
+            addButton("Spawnar Cubo Maluco", function()
+                local cube = Instance.new("Part")
+                cube.Size = Vector3.new(5, 5, 5)
+                cube.Position = LocalPlayer.Character.HumanoidRootPart.Position + Vector3.new(0, 10, 0)
+                cube.BrickColor = BrickColor.Random()
+                cube.Parent = Workspace
+                notify("ZARALHO", "Cubo maluco spawnado!")
+            end)
+
+            notify("ZARALHO Mod Menu", "Carregado! Use com cuidado, é experimental!")
+        end
+    })
+
+    -- Aba Visuals
+    local VisualsTab = Window:CreateTab("Visuals", "eye")
+    VisualsTab:CreateParagraph({
+        Title = "Visuals",
+        Content = "Melhore a visibilidade no jogo."
+    })
+
+    local Lighting = game:GetService("Lighting")
+    local fullbrightEnabled = false
+    VisualsTab:CreateToggle({
+        Name = "Fullbright",
+        CurrentValue = false,
+        Callback = function(state)
+            fullbrightEnabled = state
+            if state then
+                Lighting.Brightness = 3
+                Lighting.GlobalShadows = false
+                Lighting.FogEnd = 100000
+            else
+                Lighting.Brightness = 1
+                Lighting.GlobalShadows = true
+                Lighting.FogEnd = 1000
+            end
+            Rayfield:Notify({
+                Title = "Fullbright",
+                Content = state and "Ativado!" or "Desativado!",
+                Duration = 5,
+                Image = state and "sun" or "moon"
+            })
+        end
+    })
+
+    -- Aba Server
+    local ServerTab = Window:CreateTab("Server", "globe")
+    ServerTab:CreateParagraph({
+        Title = "Servidores",
+        Content = "Gerencie servidores."
+    })
+
+    ServerTab:CreateButton({
+        Name = "Copiar ID do Servidor",
+        Callback = function()
+            local serverId = game.JobId
+            if setclipboard then
+                setclipboard(serverId)
+                Rayfield:Notify({
+                    Title = "Sucesso",
+                    Content = "ID copiado!",
+                    Duration = 5,
+                    Image = "check"
+                })
+            else
+                Rayfield:Notify({
+                    Title = "Erro",
+                    Content = "Executor não suporta copiar.",
+                    Duration = 5,
+                    Image = "alert"
+                })
+            end
+        end
+    })
+
+    local serverIdInput = ""
+    ServerTab:CreateInput({
+        Name = "ID do Servidor",
+        PlaceholderText = "Insira o ID...",
+        Callback = function(input)
+            serverIdInput = input
+        end
+    })
+
+    ServerTab:CreateButton({
+        Name = "Teleportar",
+        Callback = function()
+            if serverIdInput and serverIdInput ~= "" then
+                local TeleportService = game:GetService("TeleportService")
+                local placeId = game.PlaceId
+                pcall(function()
+                    TeleportService:TeleportToPlaceInstance(placeId, serverIdInput, Players.LocalPlayer)
+                end)
+            else
+                Rayfield:Notify({
+                    Title = "Erro",
+                    Content = "Insira um ID válido!",
+                    Duration = 5,
+                    Image = "alert"
+                })
+            end
+        end
+    })
+
+    -- Aba Combat (Premium e Master)
+    if isPremium then
+        local CombatTab = Window:CreateTab("Combat", "target")
+        CombatTab:CreateParagraph({
+            Title = "Combat",
+            Content = isMaster and "Recursos Premium e Master: aimbot, fly, noclip e mais!" or
+                      "Recursos Premium: aimbot, ESP e triggerbot."
+        })
+
+        -- Variáveis do Combat
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
+        local UserInputService = game:GetService("UserInputService")
+        local LocalPlayer = Players.LocalPlayer
+        local Cam = workspace.CurrentCamera
+        local Hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        local Humanoid = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")
+        local aiming = false
+        local currentTarget = nil
+        local currentTargetPart = nil
+
+        -- Atualizar HRP e Humanoid quando o personagem mudar
+        local function onCharacterAdded(character)
+            Hrp = character:WaitForChild("HumanoidRootPart")
+            Humanoid = character:WaitForChild("Humanoid")
+        end
+
+        LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+        if LocalPlayer.Character then
+            onCharacterAdded(LocalPlayer.Character)
+        end
+
+        -- FOV Circle
+        local fovCircle = Drawing.new("Circle")
+        fovCircle.Thickness = 2
+        fovCircle.Radius = aimFov
+        fovCircle.Filled = false
+        fovCircle.Color = circleColor
+        fovCircle.Visible = false
+
+        -- Fly Logic
+        local function startFly()
+            local bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+            bodyVelocity.Parent = LocalPlayer.Character.HumanoidRootPart
+
+            local bodyGyro = Instance.new("BodyGyro")
+            bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+            bodyGyro.P = 10000
+            bodyGyro.Parent = LocalPlayer.Character.HumanoidRootPart
+
+            RunService:BindToRenderStep("Fly", Enum.RenderPriority.Input.Value, function()
+                if not Fly then return end
+                local cam = Cam.CFrame
+                local moveDir = Vector3.new(0, 0, 0)
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                    moveDir = moveDir + cam.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                    moveDir = moveDir - cam.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                    moveDir = moveDir - cam.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                    moveDir = moveDir + cam.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                    moveDir = moveDir + Vector3.new(0, 1, 0)
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+                    moveDir = moveDir - Vector3.new(0, 1, 0)
+                end
+                bodyVelocity.Velocity = moveDir * FlySpeed
+                bodyGyro.CFrame = cam
+            end)
+        end
+
+        local function stopFly()
+            RunService:UnbindFromRenderStep("Fly")
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                for _, obj in pairs(LocalPlayer.Character.HumanoidRootPart:GetChildren()) do
+                    if obj:IsA("BodyVelocity") or obj:IsA("BodyGyro") then
+                        obj:Destroy()
+                    end
+                end
+            end
+        end
+
+        -- Noclip Logic
+        local noclipConnection
+        local function startNoclip()
+            noclipConnection = RunService.Stepped:Connect(function()
+                if not LocalPlayer.Character then return end
+                for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end)
+        end
+
+        local function stopNoclip()
+            if noclipConnection then
+                noclipConnection:Disconnect()
+                noclipConnection = nil
+            end
+            if LocalPlayer.Character then
+                for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = true
+                    end
+                end
+            end
+        end
+
+        -- Aimbot Logic
+        local function checkTeam(player)
+            if teamCheck and player.Team == LocalPlayer.Team then
+                return true
+            end
+            return false
+        end
+
+        local function checkWall(targetCharacter)
+            local targetHead = targetCharacter:FindFirstChild("Head")
+            if not targetHead then return true end
+
+            local origin = Cam.CFrame.Position
+            local direction = (targetHead.Position - origin).Unit * (targetHead.Position - origin).Magnitude
+            local raycastParams = RaycastParams.new()
+            raycastParams.FilterDescendantsInstances = {LocalPlayer.Character, targetCharacter}
+            raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+
+            local raycastResult = workspace:Raycast(origin, direction, raycastParams)
+            return raycastResult and raycastResult.Instance ~= nil
+        end
+
+        local function getClosestPart(character)
+            local closestPart = nil
+            local shortestCursorDistance = aimFov
+            local cameraPos = Cam.CFrame.Position
+
+            for _, partName in ipairs(aimParts) do
+                local part = character:FindFirstChild(partName)
+                if part then
+                    local partPos = Cam:WorldToViewportPoint(part.Position)
+                    local screenPos = Vector2.new(partPos.X, partPos.Y)
+                    local cursorDistance = (screenPos - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+
+                    if cursorDistance < shortestCursorDistance and partPos.Z > 0 then
+                        shortestCursorDistance = cursorDistance
+                        closestPart = part
+                    end
+                end
+            end
+
+            return closestPart
+        end
+
+        local function getTarget()
+            local nearestPlayer = nil
+            local closestPart = nil
+            local shortestCursorDistance = aimFov
+
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character and not checkTeam(player) then
+                    if player.Character.Humanoid.Health >= minHealth or not healthCheck then
+                        local targetPart = getClosestPart(player.Character)
+                        if targetPart then
+                            local screenPos = Cam:WorldToViewportPoint(targetPart.Position)
+                            local cursorDistance = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+
+                            if cursorDistance < shortestCursorDistance then
+                                if not wallCheck or not checkWall(player.Character) then
+                                    shortestCursorDistance = cursorDistance
+                                    nearestPlayer = player
+                                    closestPart = targetPart
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+
+            return nearestPlayer, closestPart
+        end
+
+        local function predict(player, part)
+            if player and part then
+                local velocity = player.Character.HumanoidRootPart.Velocity
+                local predictedPosition = part.Position + (velocity * predictionStrength)
+                return predictedPosition
+            end
+            return nil
+        end
+
+        local function smooth(from, to)
+            return from:Lerp(to, smoothing)
+        end
+
+        local function aimAt(player, part)
+            local predictedPosition = predict(player, part)
+            if predictedPosition then
+                if player.Character.Humanoid.Health >= minHealth or not healthCheck then
+                    local targetCFrame = CFrame.new(Cam.CFrame.Position, predictedPosition)
+                    Cam.CFrame = smooth(Cam.CFrame, targetCFrame)
+                end
+            end
+        end
+
+        -- Configurar hotkey do aimbot
+        local function setAimbotHotkey(input)
+            if not input or input == "" then
+                Rayfield:Notify({
+                    Title = "Erro",
+                    Content = "Insira uma tecla válida.",
+                    Duration = 5,
+                    Image = "alert"
+                })
+                return
+            end
+
+            local keyName = input:upper()
+            local keyCode = Enum.KeyCode[keyName]
+            if keyCode then
+                aimbotHotkey = keyCode
+                SaveSettings()
+                print("Aimbot hotkey set to: " .. keyName)
+                Rayfield:Notify({
+                    Title = "Sucesso",
+                    Content = "Aimbot hotkey ajustado para " .. keyName .. "!",
+                    Duration = 5,
+                    Image = "check"
+                })
+            else
+                print("Invalid key: " .. input)
+                Rayfield:Notify({
+                    Title = "Erro",
+                    Content = "Tecla inválida: " .. input,
+                    Duration = 5,
+                    Image = "alert"
+                })
+            end
+        end
+
+        -- Controles Premium
+        CombatTab:CreateSection("Recursos Premium")
+        CombatTab:CreateToggle({
+            Name = "Aimbot",
+            CurrentValue = aimbotEnabled,
+            Callback = function(state)
+                aimbotEnabled = state
+                fovCircle.Visible = state and aimbotActivationMode ~= "Sempre Ativado"
+                print("Aimbot " .. (state and "enabled" or "disabled"))
+                Rayfield:Notify({
+                    Title = "Aimbot",
+                    Content = state and "Ativado!" or "Desativado!",
+                    Duration = 5,
+                    Image = state and "play" or "pause"
+                })
+                SaveSettings()
+            end
+        })
+
+        CombatTab:CreateDropdown({
+            Name = "Modo de Ativação do Aimbot",
+            Options = {"Botão de Mouse (Mirar)", "Sempre Ativado", "Hotkey"},
+            CurrentOption = aimbotActivationMode,
+            Callback = function(option)
+                aimbotActivationMode = type(option) == "table" and option[1] or option
+                fovCircle.Visible = aimbotEnabled and aimbotActivationMode ~= "Sempre Ativado"
+                Rayfield:Notify({
+                    Title = "Modo de Ativação",
+                    Content = "Modo ajustado para " .. aimbotActivationMode .. "!",
+                    Duration = 5,
+                    Image = "check"
+                })
+                SaveSettings()
+            end
+        })
+
+        CombatTab:CreateInput({
+            Name = "Aimbot Hotkey",
+            PlaceholderText = "Digite a tecla (ex.: E, Q, V)...",
+            RemoveTextAfterFocusLost = true,
+            Callback = function(value)
+                if aimbotActivationMode == "Hotkey" then
+                    setAimbotHotkey(value)
+                end
+            end
+        })
+
+        CombatTab:CreateToggle({
+            Name = "Sticky Aim",
+            CurrentValue = stickyAimEnabled,
+            Callback = function(state)
+                stickyAimEnabled = state
+                Rayfield:Notify({
+                    Title = "Sticky Aim",
+                    Content = state and "Ativado!" or "Desativado!",
+                    Duration = 5,
+                    Image = state and "play" or "pause"
+                })
+                SaveSettings()
+            end
+        })
+
+        CombatTab:CreateToggle({
+            Name = "Team Check",
+            CurrentValue = teamCheck,
+            Callback = function(state)
+                teamCheck = state
+                Rayfield:Notify({
+                    Title = "Team Check",
+                    Content = state and "Ativado!" or "Desativado!",
+                    Duration = 5,
+                    Image = state and "play" or "pause"
+                })
+                SaveSettings()
+            end
+        })
+
+        CombatTab:CreateToggle({
+            Name = "Wall Check",
+            CurrentValue = wallCheck,
+            Callback = function(state)
+                wallCheck = state
+                Rayfield:Notify({
+                    Title = "Wall Check",
+                    Content = state and "Ativado!" or "Desativado!",
+                    Duration = 5,
+                    Image = state and "play" or "pause"
+                })
+                SaveSettings()
+            end
+        })
+
+        CombatTab:CreateToggle({
+            Name = "Health Check",
+            CurrentValue = healthCheck,
+            Callback = function(state)
+                healthCheck = state
+                Rayfield:Notify({
+                    Title = "Health Check",
+                    Content = state and "Ativado!" or "Desativado!",
+                    Duration = 5,
+                    Image = state and "play" or "pause"
+                })
+                SaveSettings()
+            end
+        })
+
+        CombatTab:CreateToggle({
+            Name = "FOV Visibility",
+            CurrentValue = true,
+            Callback = function(state)
+                if aimbotEnabled and aimbotActivationMode ~= "Sempre Ativado" then
+                    fovCircle.Visible = state
+                end
+                Rayfield:Notify({
+                    Title = "FOV Visibility",
+                    Content = state and "Ativado!" or "Desativado!",
+                    Duration = 5,
+                    Image = state and "play" or "pause"
+                })
+                SaveSettings()
+            end
+        })
+
+        CombatTab:CreateToggle({
+            Name = "Rainbow FOV",
+            CurrentValue = rainbowFov,
+            Callback = function(state)
+                rainbowFov = state
+                Rayfield:Notify({
+                    Title = "Rainbow FOV",
+                    Content = state and "Ativado!" or "Desativado!",
+                    Duration = 5,
+                    Image = state and "play" or "pause"
+                })
+                SaveSettings()
+            end
+        })
+
+        CombatTab:CreateSlider({
+            Name = "FOV",
+            Range = {0, 1000},
+            Increment = 1,
+            CurrentValue = aimFov,
+            Callback = function(value)
+                aimFov = value
+                fovCircle.Radius = value
+                Rayfield:Notify({
+                    Title = "FOV",
+                    Content = "Ajustado para " .. value .. "!",
+                    Duration = 5,
+                    Image = "check"
+                })
+                SaveSettings()
+            end
+        })
+
+        CombatTab:CreateSlider({
+            Name = "Smoothing",
+            Range = {0, 100},
+            Increment = 1,
+            CurrentValue = (1 - smoothing) * 100,
+            Callback = function(value)
+                smoothing = 1 - (value / 100)
+                Rayfield:Notify({
+                    Title = "Smoothing",
+                    Content = "Ajustado para " .. value .. "!",
+                    Duration = 5,
+                    Image = "check"
+                })
+                SaveSettings()
+            end
+        })
+
+        CombatTab:CreateSlider({
+            Name = "Prediction Strength",
+            Range = {0, 0.2},
+            Increment = 0.001,
+            CurrentValue = predictionStrength,
+            Callback = function(value)
+                predictionStrength = value
+                Rayfield:Notify({
+                    Title = "Prediction Strength",
+                    Content = "Ajustado para " .. value .. "!",
+                    Duration = 5,
+                    Image = "check"
+                })
+                SaveSettings()
+            end
+        })
+
+        CombatTab:CreateSlider({
+            Name = "Min Health",
+            Range = {0, 100},
+            Increment = 1,
+            CurrentValue = minHealth,
+            Callback = function(value)
+                minHealth = value
+                Rayfield:Notify({
+                    Title = "Min Health",
+                    Content = "Ajustado para " .. value .. "!",
+                    Duration = 5,
+                    Image = "check"
+                })
+                SaveSettings()
+            end
+        })
+
+        CombatTab:CreateDropdown({
+            Name = "Aim Parts",
+            Options = {"Head", "HumanoidRootPart", "Left Arm", "Right Arm", "Torso", "Left Leg", "Right Leg"},
+            CurrentOption = aimParts,
+            MultipleOptions = true,
+            Callback = function(options)
+                aimParts = options
+                Rayfield:Notify({
+                    Title = "Aim Parts",
+                    Content = "Partes selecionadas: " .. table.concat(options, ", ") .. "!",
+                    Duration = 5,
+                    Image = "target"
+                })
+                SaveSettings()
+            end
+        })
+
+        CombatTab:CreateColorPicker({
+            Name = "FOV Color",
+            Color = circleColor,
+            Callback = function(color)
+                circleColor = color
+                if not rainbowFov then
+                    fovCircle.Color = color
+                end
+                Rayfield:Notify({
+                    Title = "FOV Color",
+                    Content = "Cor ajustada!",
+                    Duration = 5,
+                    Image = "check"
+                })
+                SaveSettings()
+            end
+        })
+
+        CombatTab:CreateColorPicker({
+            Name = "Targeted FOV Color",
+            Color = targetedCircleColor,
+            Callback = function(color)
+                targetedCircleColor = color
+                Rayfield:Notify({
+                    Title = "Targeted FOV Color",
+                    Content = "Cor ajustada!",
+                    Duration = 5,
+                    Image = "check"
+                })
+                SaveSettings()
+            end
+        })
+
+        CombatTab:CreateToggle({
+            Name = "ESP",
+            CurrentValue = Esp,
+            Callback = function(state)
+                Esp = state
+                if not state then
+                    for _, player in pairs(Players:GetPlayers()) do
+                        if player.Character then
+                            local highlight = player.Character:FindFirstChildOfClass("Highlight")
+                            if highlight then highlight:Destroy() end
+                        end
+                    end
+                end
+                Rayfield:Notify({
+                    Title = "ESP",
+                    Content = state and "Ativado!" or "Desativado!",
+                    Duration = 5,
+                    Image = state and "eye" or "eye-off"
+                })
+                SaveSettings()
+            end
+        })
+
+        CombatTab:CreateToggle({
+            Name = "Triggerbot",
+            CurrentValue = Triggerbot,
+            Callback = function(state)
+                Triggerbot = state
+                Rayfield:Notify({
+                    Title = "Triggerbot",
+                    Content = state and "Ativado!" or "Desativado!",
+                    Duration = 5,
+                    Image = state and "play" or "pause"
+                })
+                SaveSettings()
+            end
+        })
+
+        -- Controles Master
+        if isMaster then
+            CombatTab:CreateSection("Recursos Master - Combate")
+            CombatTab:CreateToggle({
+                Name = "Anti-Aim",
+                CurrentValue = antiAim,
+                Callback = function(state)
+                    antiAim = state
+                    print("Anti-aim " .. (state and "enabled" or "disabled"))
+                    Rayfield:Notify({
+                        Title = "Anti-Aim",
+                        Content = state and "Ativado!" or "Desativado!",
+                        Duration = 5,
+                        Image = state and "play" or "pause"
+                    })
+                    SaveSettings()
+                end
+            })
+
+            CombatTab:CreateDropdown({
+                Name = "Anti-Aim Method",
+                Options = {"Reset Velo", "Random Velo", "Reset Pos [BROKEN]"},
+                CurrentOption = antiAimMethod,
+                Callback = function(option)
+                    antiAimMethod = type(option) == "table" and option[1] or option
+                    print("Anti-aim method: " .. antiAimMethod)
+                    Rayfield:Notify({
+                        Title = "Anti-Aim Method",
+                        Content = "Método ajustado para " .. antiAimMethod .. "!",
+                        Duration = 5,
+                        Image = "check"
+                    })
+                    SaveSettings()
+                end
+            })
+
+            CombatTab:CreateSlider({
+                Name = "Anti-Aim Amount X",
+                Range = {-1000, 1000},
+                Increment = 10,
+                CurrentValue = antiAimAmountX,
+                Callback = function(value)
+                    antiAimAmountX = value
+                    Rayfield:Notify({
+                        Title = "Anti-Aim Amount X",
+                        Content = "Ajustado para " .. value .. "!",
+                        Duration = 5,
+                        Image = "check"
+                    })
+                    SaveSettings()
+                end
+            })
+
+            CombatTab:CreateSlider({
+                Name = "Anti-Aim Amount Y",
+                Range = {-1000, 1000},
+                Increment = 10,
+                CurrentValue = antiAimAmountY,
+                Callback = function(value)
+                    antiAimAmountY = value
+                    Rayfield:Notify({
+                        Title = "Anti-Aim Amount Y",
+                        Content = "Ajustado para " .. value .. "!",
+                        Duration = 5,
+                        Image = "check"
+                    })
+                    SaveSettings()
+                end
+            })
+
+            CombatTab:CreateSlider({
+                Name = "Anti-Aim Amount Z",
+                Range = {-1000, 1000},
+                Increment = 10,
+                CurrentValue = antiAimAmountZ,
+                Callback = function(value)
+                    antiAimAmountZ = value
+                    Rayfield:Notify({
+                        Title = "Anti-Aim Amount Z",
+                        Content = "Ajustado para " .. value .. "!",
+                        Duration = 5,
+                        Image = "check"
+                    })
+                    SaveSettings()
+                end
+            })
+
+            CombatTab:CreateSlider({
+                Name = "Random Velo Range",
+                Range = {0, 1000},
+                Increment = 10,
+                CurrentValue = randomVeloRange,
+                Callback = function(value)
+                    randomVeloRange = value
+                    Rayfield:Notify({
+                        Title = "Random Velo Range",
+                        Content = "Ajustado para " .. value .. "!",
+                        Duration = 5,
+                        Image = "check"
+                    })
+                    SaveSettings()
+                end
+            })
+
+            CombatTab:CreateToggle({
+                Name = "Spin-Bot",
+                CurrentValue = spinBot,
+                Callback = function(state)
+                    spinBot = state
+                    if state then
+                        for _, v in pairs(Hrp:GetChildren()) do
+                            if v.Name == "Spinning" then
+                                v:Destroy()
+                            end
+                        end
+                        LocalPlayer.Character.Humanoid.AutoRotate = false
+                        local Spin = Instance.new("BodyAngularVelocity")
+                        Spin.Name = "Spinning"
+                        Spin.Parent = Hrp
+                        Spin.MaxTorque = Vector3.new(0, math.huge, 0)
+                        Spin.AngularVelocity = Vector3.new(0, spinBotSpeed, 0)
+                        Rayfield:Notify({
+                            Title = "Spin-Bot",
+                            Content = "Ativado!",
+                            Duration = 5,
+                            Image = "play"
+                        })
+                    else
+                        for _, v in pairs(Hrp:GetChildren()) do
+                            if v.Name == "Spinning" then
+                                v:Destroy()
+                            end
+                        end
+                        LocalPlayer.Character.Humanoid.AutoRotate = true
+                        Rayfield:Notify({
+                            Title = "Spin-Bot",
+                            Content = "Desativado!",
+                            Duration = 5,
+                            Image = "pause"
+                        })
+                    end
+                    SaveSettings()
+                end
+            })
+
+            CombatTab:CreateSlider({
+                Name = "Spin-Bot Speed",
+                Range = {0, 1000},
+                Increment = 1,
+                CurrentValue = spinBotSpeed,
+                Callback = function(value)
+                    spinBotSpeed = value
+                    if spinBot then
+                        for _, v in pairs(Hrp:GetChildren()) do
+                            if v.Name == "Spinning" then
+                                v:Destroy()
+                            end
+                        end
+                        local Spin = Instance.new("BodyAngularVelocity")
+                        Spin.Name = "Spinning"
+                        Spin.Parent = Hrp
+                        Spin.MaxTorque = Vector3.new(0, math.huge, 0)
+                        Spin.AngularVelocity = Vector3.new(0, value, 0)
+                    end
+                    Rayfield:Notify({
+                        Title = "Spin-Bot Speed",
+                        Content = "Ajustado para " .. value .. "!",
+                        Duration = 5,
+                        Image = "check"
+                    })
+                    SaveSettings()
+                end
+            })
+
+            CombatTab:CreateToggle({
+                Name = "ESP Avançado",
+                CurrentValue = EspAdvanced,
+                Callback = function(state)
+                    EspAdvanced = state
+                    if not state then
+                        for _, player in pairs(Players:GetPlayers()) do
+                            if player.Character then
+                                local billboard = player.Character:FindFirstChild("Ba4kzEspBillboard")
+                                if billboard then billboard:Destroy() end
+                            end
+                        end
+                    end
+                    Rayfield:Notify({
+                        Title = "ESP Avançado",
+                        Content = state and "Ativado!" or "Desativado!",
+                        Duration = 5,
+                        Image = state and "eye" or "eye-off"
+                    })
+                    SaveSettings()
+                end
+            })
+
+            CombatTab:CreateToggle({
+                Name = "Wallhack",
+                CurrentValue = Wallhack,
+                Callback = function(state)
+                    Wallhack = state
+                    if not state then
+                        for _, player in pairs(Players:GetPlayers()) do
+                            if player.Character then
+                                local highlight = player.Character:FindFirstChildOfClass("Highlight")
+                                if highlight then highlight:Destroy() end
+                            end
+                        end
+                    end
+                    Rayfield:Notify({
+                        Title = "Wallhack",
+                        Content = state and "Ativado!" or "Desativado!",
+                        Duration = 5,
+                        Image = state and "eye" or "eye-off"
+                    })
+                    SaveSettings()
+                end
+            })
+
+            CombatTab:CreateToggle({
+                Name = "No Recoil",
+                CurrentValue = NoRecoil,
+                Callback = function(state)
+                    NoRecoil = state
+                    Rayfield:Notify({
+                        Title = "No Recoil",
+                        Content = state and "Ativado!" or "Desativado!",
+                        Duration = 5,
+                        Image = state and "play" or "pause"
+                    })
+                    SaveSettings()
+                end
+            })
+
+            CombatTab:CreateSection("Recursos Master - Mobilidade")
+            CombatTab:CreateToggle({
+                Name = "Fly",
+                CurrentValue = Fly,
+                Callback = function(state)
+                    Fly = state
+                    if state then
+                        startFly()
+                        Rayfield:Notify({
+                            Title = "Fly",
+                            Content = "Ativado! Use W,A,S,D, Space, Ctrl para mover.",
+                            Duration = 5,
+                            Image = "play"
+                        })
+                    else
+                        stopFly()
+                        Rayfield:Notify({
+                            Title = "Fly",
+                            Content = "Desativado!",
+                            Duration = 5,
+                            Image = "pause"
+                        })
+                    end
+                    SaveSettings()
+                end
+            })
+
+            CombatTab:CreateSlider({
+                Name = "Fly Speed",
+                Range = {10, 200},
+                Increment = 10,
+                CurrentValue = FlySpeed,
+                Callback = function(value)
+                    FlySpeed = value
+                    Rayfield:Notify({
+                        Title = "Fly Speed",
+                        Content = "Ajustado para " .. value .. "!",
+                        Duration = 5,
+                        Image = "check"
+                    })
+                    SaveSettings()
+                end
+            })
+
+            CombatTab:CreateToggle({
+                Name = "Noclip",
+                CurrentValue = Noclip,
+                Callback = function(state)
+                    Noclip = state
+                    if state then
+                        startNoclip()
+                        Rayfield:Notify({
+                            Title = "Noclip",
+                            Content = "Ativado! Passe por paredes.",
+                            Duration = 5,
+                            Image = "play"
+                        })
+                    else
+                        stopNoclip()
+                        Rayfield:Notify({
+                            Title = "Noclip",
+                            Content = "Desativado!",
+                            Duration = 5,
+                            Image = "pause"
+                        })
+                    end
+                    SaveSettings()
+                end
+            })
+
+            CombatTab:CreateSlider({
+                Name = "Speed Hack",
+                Range = {16, 100},
+                Increment = 1,
+                CurrentValue = SpeedValue,
+                Callback = function(value)
+                    SpeedValue = value
+                    SpeedHack = value > 16
+                    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+                        LocalPlayer.Character.Humanoid.WalkSpeed = value
+                    end
+                    Rayfield:Notify({
+                        Title = "Speed Hack",
+                        Content = "Velocidade ajustada para " .. value .. "!",
+                        Duration = 5,
+                        Image = "check"
+                    })
+                    SaveSettings()
+                end
+            })
+        end
+
+        -- Lógica do Combat
+        RunService.RenderStepped:Connect(function()
+            if not LocalPlayer.Character or not Cam then return end
+
+            if aimbotEnabled then
+                local offset = 50
+                fovCircle.Position = Vector2.new(Mouse.X, Mouse.Y + offset)
+
+                if rainbowFov then
+                    hue = hue + rainbowSpeed
+                    if hue > 1 then hue = 0 end
+                    fovCircle.Color = Color3.fromHSV(hue, 1, 1)
+                else
+                    if aiming and currentTarget then
+                        fovCircle.Color = targetedCircleColor
+                    else
+                        fovCircle.Color = circleColor
+                    end
+                end
+
+                if aimbotActivationMode == "Sempre Ativado" or (aimbotActivationMode == "Botão de Mouse (Mirar)" and UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2)) or (aimbotActivationMode == "Hotkey" and aiming) then
+                    if stickyAimEnabled and currentTarget then
+                        local headPos = Cam:WorldToViewportPoint(currentTarget.Character.Head.Position)
+                        local screenPos = Vector2.new(headPos.X, headPos.Y)
+                        local cursorDistance = (screenPos - Vector2.new(Mouse.X, Mouse.Y)).Magnitude
+
+                        if cursorDistance > aimFov or (wallCheck and checkWall(currentTarget.Character)) or checkTeam(currentTarget) then
+                            currentTarget = nil
+                        end
+                    end
+
+                    if not stickyAimEnabled or not currentTarget then
+                        local target, targetPart = getTarget()
+                        currentTarget = target
+                        currentTargetPart = targetPart
+                        if target then
+                            print("Targeting: " .. target.Name)
+                        end
+                    end
+
+                    if currentTarget and currentTargetPart then
+                        aimAt(currentTarget, currentTargetPart)
+                    end
+                else
+                    currentTarget = nil
+                end
+            end
+
+            if Triggerbot then
+                local closest = nil
+                local dist = aimFov
+                local camSpot = Cam.CFrame.Position
+
+                for _, player in pairs(Players:GetPlayers()) do
+                    if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") and player.Character:FindFirstChild("Humanoid") then
+                        if player.Character.Humanoid.Health <= 0 then continue end
+                        if teamCheck and player.Team == LocalPlayer.Team then continue end
+                        if healthCheck and player.Character.Humanoid.Health < minHealth then continue end
+
+                        local spot = player.Character.Head.Position
+                        local screen, visible = Cam:WorldToViewportPoint(spot)
+                        local howFar = (Vector2.new(screen.X, screen.Y) - Vector2.new(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y / 2)).Magnitude
+
+                        if visible and howFar < dist then
+                            local start = camSpot
+                            local dir = (spot - start).Unit * 500
+                            local rayParams = RaycastParams.new()
+                            rayParams.FilterDescendantsInstances = {LocalPlayer.Character}
+                            rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+                            local rayHit = workspace:Raycast(start, dir, rayParams)
+
+                            if wallCheck and rayHit and not rayHit.Instance:IsDescendantOf(player.Character) then continue end
+
+                            dist = howFar
+                            closest = player
+                        end
+                    end
+                end
+
+                if closest then
+                    pcall(function() mouse1click() end)
+                end
+            end
+
+            if Esp then
+                for _, player in pairs(Players:GetPlayers()) do
+                    if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") then
+                        local highlight = player.Character:FindFirstChildOfClass("Highlight")
+                        if not highlight then
+                            highlight = Instance.new("Highlight")
+                            highlight.Parent = player.Character
+                            highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                            highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                            highlight.FillTransparency = 0.7
+                        end
+                    end
+                end
+            end
+
+            if isMaster and EspAdvanced then
+                for _, player in pairs(Players:GetPlayers()) do
+                    if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character:FindFirstChild("Head") then
+                        local billboard = player.Character:FindFirstChild("Ba4kzEspBillboard")
+                        if not billboard then
+                            billboard = Instance.new("BillboardGui")
+                            billboard.Name = "Ba4kzEspBillboard"
+                            billboard.Parent = player.Character
+                            billboard.Adornee = player.Character.Head
+                            billboard.Size = UDim2.new(0, 100, 0, 50)
+                            billboard.StudsOffset = Vector3.new(0, 3, 0)
+                            billboard.AlwaysOnTop = true
+
+                            local nameLabel = Instance.new("TextLabel")
+                            nameLabel.Size = UDim2.new(1, 0, 0, 20)
+                            nameLabel.BackgroundTransparency = 1
+                            nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+                            nameLabel.Text = player.Name
+                            nameLabel.Parent = billboard
+
+                            local healthLabel = Instance.new("TextLabel")
+                            healthLabel.Size = UDim2.new(1, 0, 0, 20)
+                            healthLabel.Position = UDim2.new(0, 0, 0, 20)
+                            healthLabel.BackgroundTransparency = 1
+                            healthLabel.TextColor3 = Color3.fromRGB(0, 255, 0)
+                            healthLabel.Parent = billboard
+                        end
+
+                        local health = player.Character.Humanoid.Health
+                        local maxHealth = player.Character.Humanoid.MaxHealth
+                        billboard:FindFirstChildOfClass("TextLabel", true).Text = player.Name
+                        billboard:FindFirstChildOfClass("TextLabel", true, 2).Text = "HP: " .. math.floor(health) .. "/" .. maxHealth
+                    end
+                end
+            end
+
+            if isMaster and Wallhack then
+                for _, player in pairs(Players:GetPlayers()) do
+                    if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") then
+                        local highlight = player.Character:FindFirstChildOfClass("Highlight")
+                        if not highlight then
+                            highlight = Instance.new("Highlight")
+                            highlight.Parent = player.Character
+                            highlight.OutlineColor = Color3.fromRGB(255, 255, 0)
+                            highlight.FillColor = Color3.fromRGB(255, 165, 0)
+                            highlight.FillTransparency = 0.5
+                            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                        end
+                    end
+                end
+            end
+
+            if isMaster and NoRecoil then
+                Cam.CFrame = Cam.CFrame * CFrame.Angles(math.rad(math.random(-1, 1) * 0.1), math.rad(math.random(-1, 1) * 0.1), 0)
+            end
+        end)
+
+        RunService.Heartbeat:Connect(function()
+            if isMaster and antiAim and Hrp then
+                if antiAimMethod == "Reset Velo" then
+                    local vel = Hrp.Velocity
+                    Hrp.Velocity = Vector3.new(antiAimAmountX, antiAimAmountY, antiAimAmountZ)
+                    RunService.RenderStepped:Wait()
+                    Hrp.Velocity = vel
+                elseif antiAimMethod == "Reset Pos [BROKEN]" then
+                    local pos = Hrp.CFrame
+                    Hrp.Velocity = Vector3.new(antiAimAmountX, antiAimAmountY, antiAimAmountZ)
+                    RunService.RenderStepped:Wait()
+                    Hrp.CFrame = pos
+                elseif antiAimMethod == "Random Velo" then
+                    local vel = Hrp.Velocity
+                    local a = math.random(-randomVeloRange, randomVeloRange)
+                    local s = math.random(-randomVeloRange, randomVeloRange)
+                    local d = math.random(-randomVeloRange, randomVeloRange)
+                    Hrp.Velocity = Vector3.new(a, s, d)
+                    RunService.RenderStepped:Wait()
+                    Hrp.Velocity = vel
+                end
+            end
+        end)
+
+        -- Bind aimbot hotkey
+        UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if gameProcessed then return end
+            if aimbotActivationMode == "Hotkey" and input.KeyCode == aimbotHotkey and aimbotEnabled then
+                aiming = true
+                print("Aimbot activated with " .. aimbotHotkey.Name)
+            end
+        end)
+
+        UserInputService.InputEnded:Connect(function(input, gameProcessed)
+            if gameProcessed then return end
+            if aimbotActivationMode == "Hotkey" and input.KeyCode == aimbotHotkey and aimbotEnabled then
+                aiming = false
+            end
+        end)
+    end
+
+    -- Executar verificação de Place ID
+    checkPlaceId()
+
+    Rayfield:Notify({
+        Title = isMaster and "Usuário Master" or isPremium and "Usuário Premium" or "Usuário Normal",
+        Content = "Ba4kz Hub carregado! Discord: https://discord.gg/your-discord",
+        Duration = 5,
+        Image = "check"
+    })
+end
+
+print("Script initialized.")
